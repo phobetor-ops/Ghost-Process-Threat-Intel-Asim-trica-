@@ -1,0 +1,87 @@
+name: Ghost Process Threat Intel Pipeline
+
+on:
+  schedule:
+    # Job 1 (Recon): Runs every 4 hours at minute 0 (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
+    - cron: '0 */4 * * *'
+    # Job 2 (Digest): Runs once daily at 10:00 UTC
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+    inputs:
+      target_job:
+        description: 'Select which pipeline job to trigger manually'
+        required: true
+        default: 'recon'
+        type: choice
+        options:
+          - recon
+          - digest
+          - both
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ghost-process-${{ github.workflow }}-${{ github.event.schedule || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  PYTHONUNBUFFERED: '1'
+  SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+  SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+  GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+  TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+  TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+jobs:
+  recon:
+    name: Job 1 - Threat Recon & Emergency Alerting
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 */4 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.target_job == 'recon' || github.event.inputs.target_job == 'both'))
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Recon & Emergency Pipeline
+        run: python main.py --mode recon
+
+  digest:
+    name: Job 2 - Daily Routine Threat Digest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: >-
+      (github.event_name == 'schedule' && github.event.schedule == '0 10 * * *') ||
+      (github.event_name == 'workflow_dispatch' &&
+       (github.event.inputs.target_job == 'digest' || github.event.inputs.target_job == 'both'))
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set Up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Execute Daily Digest Delivery
+        run: python digest.py
