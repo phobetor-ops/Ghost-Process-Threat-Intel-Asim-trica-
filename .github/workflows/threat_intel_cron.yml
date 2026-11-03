@@ -26,6 +26,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
   PYTHONUNBUFFERED: '1'
   SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
   SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -62,12 +63,15 @@ jobs:
 
   digest:
     name: Job 2 - Daily Routine Threat Digest
+    needs: [recon]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: >-
-      (github.event_name == 'schedule' && github.event.schedule == '0 10 * * *') ||
-      (github.event_name == 'workflow_dispatch' &&
-       (github.event.inputs.target_job == 'digest' || github.event.inputs.target_job == 'both'))
+      always() &&
+      (needs.recon.result == 'success' || needs.recon.result == 'skipped') &&
+      ((github.event_name == 'schedule' && github.event.schedule == '0 10 * * *') ||
+       (github.event_name == 'workflow_dispatch' &&
+        (github.event.inputs.target_job == 'digest' || github.event.inputs.target_job == 'both')))
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
