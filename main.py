@@ -52,8 +52,8 @@ T = TypeVar("T")
 # Constants & Feed Sources
 # ---------------------------------------------------------------------------
 GROQ_MODEL = "llama-3.1-8b-instant"
-MAX_ITEMS_PER_FEED = int(os.getenv("MAX_ITEMS_PER_FEED", "20"))
-LLM_CONCURRENCY_LIMIT = int(os.getenv("LLM_CONCURRENCY_LIMIT", "3"))
+MAX_ITEMS_PER_FEED = int(os.getenv("MAX_ITEMS_PER_FEED", "6"))
+LLM_CONCURRENCY_LIMIT = int(os.getenv("LLM_CONCURRENCY_LIMIT", "1"))
 TELEGRAM_MAX_MESSAGE_LEN = 4000  # Safe margin below Telegram's 4096-char hard limit
 
 DEFAULT_SECURITY_FEEDS: Dict[str, str] = {
@@ -511,10 +511,20 @@ async def classify_and_distill_packet(
         if evaluate_emergency_heuristics(packet):
             severity = "EMERGENCY"
 
-        markdown_report = str(parsed.get("markdown_report", "")).strip()
+        raw_report = parsed.get("markdown_report", "")
+        if isinstance(raw_report, dict):
+            markdown_report = "\n".join(
+                f"• *{k}*: {v}" for k, v in raw_report.items() if v
+            ).strip()
+        elif isinstance(raw_report, list):
+            markdown_report = "\n".join(f"• {item}" for item in raw_report if item).strip()
+        else:
+            markdown_report = str(raw_report).strip()
+
         if not markdown_report:
             raise ValueError("Groq JSON response missing non-empty 'markdown_report'.")
 
+        await asyncio.sleep(1.5)  # Respect Groq free-tier 30 RPM / TPM pacing
         return DistilledThreat(
             severity_flag=severity,
             markdown_report=markdown_report,
