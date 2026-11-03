@@ -25,7 +25,14 @@ from typing import Any, Callable, Coroutine, Dict, List, Optional, Set, Tuple, T
 
 import aiohttp
 import feedparser
-from groq import APIConnectionError, APIStatusError, AsyncGroq, RateLimitError
+from groq import (
+    APIConnectionError,
+    APIStatusError,
+    AuthenticationError,
+    AsyncGroq,
+    PermissionDeniedError,
+    RateLimitError,
+)
 from supabase import Client, create_client
 
 # ---------------------------------------------------------------------------
@@ -192,6 +199,13 @@ async def retry_with_backoff(
         try:
             return await coro_factory()
         except asyncio.CancelledError:
+            raise
+        except (AuthenticationError, PermissionDeniedError) as auth_exc:
+            logger.error(
+                "%s aborted immediately due to authentication error: %s",
+                operation_name,
+                auth_exc,
+            )
             raise
         except Exception as exc:  # pylint: disable=broad-exception-caught
             last_exc = exc
